@@ -24,7 +24,8 @@ int Shell::runNonInteractive(std::istream &in) {
         while (true) {
             char cwd[4096] = "";
             if (!getcwd(cwd, sizeof(cwd))) cwd[0] = '\0';
-            std::string prompt = std::string("teamshell:") + cwd + " ";
+            // Prompt format: teamshell:<cwd>
+            std::string prompt = std::string("teamshell:") + cwd + ">";
             char *line = readline(prompt.c_str());
             if (!line) break; // EOF (Ctrl-D)
             if (line[0] != '\0') {
