@@ -6,7 +6,7 @@
 
 ```bash
 sudo apt update
-sudo apt install -y libreadline-dev
+sudo apt install -y build-essential libreadline-dev
 ```
 
 ## 2. 빌드 
