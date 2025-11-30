@@ -4,7 +4,7 @@
 다음 명령어를 사용하여 프로젝트를 컴파일합니다.
 
 ```bash
-gcc -o teamshell.c teamshell.c
+gcc -o teamshell teamshell.c
 ```
 
 ## 2. 실행 (Run)
