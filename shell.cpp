@@ -10,10 +10,32 @@
 #include <glob.h>
 #include <cstring>
 #include <iostream>
+// readline for interactive prompt
+#include <readline/readline.h>
+#include <readline/history.h>
 
 Shell::Shell() {}
 
 int Shell::runNonInteractive(std::istream &in) {
+    // If stdin is a TTY, offer an interactive prompt using readline.
+    if (isatty(STDIN_FILENO)) {
+        // initialize readline completion to filename completion
+        rl_attempted_completion_function = (rl_completion_func_t *) (void *) rl_filename_completion_function;
+        while (true) {
+            char cwd[4096] = "";
+            if (!getcwd(cwd, sizeof(cwd))) cwd[0] = '\0';
+            std::string prompt = std::string("teamshell:") + cwd + " ";
+            char *line = readline(prompt.c_str());
+            if (!line) break; // EOF (Ctrl-D)
+            if (line[0] != '\0') {
+                add_history(line);
+                handleLine(std::string(line));
+            }
+            free(line);
+        }
+        return 0;
+    }
+
     std::string line;
     while (std::getline(in, line)) {
         handleLine(line);
