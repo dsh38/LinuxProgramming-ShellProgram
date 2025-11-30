@@ -1,0 +1,6 @@
+{
+    "files.associations": {
+        "*.pc": "c",
+        "xlocmes": "cpp"
+    }
+}
