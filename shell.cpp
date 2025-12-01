@@ -13,8 +13,19 @@
 // readline for interactive prompt
 #include <readline/readline.h>
 #include <readline/history.h>
+#include <signal.h>
 
-Shell::Shell() {}
+// forward declare signal handlers so constructor can register them
+static void sigint_handler(int);
+static void sigtstp_handler(int);
+static void sigquit_handler(int);
+
+Shell::Shell() {
+    // register signal handlers to forward to foreground process group
+    signal(SIGINT, sigint_handler);
+    signal(SIGTSTP, sigtstp_handler);
+    signal(SIGQUIT, sigquit_handler);
+}
 
 int Shell::runNonInteractive(std::istream &in) {
     // If stdin is a TTY, offer an interactive prompt using readline.
@@ -70,10 +81,35 @@ static void setup_redirections(const CommandLine &cl) {
     }
 }
 
-static void execute_pipeline(const std::vector<CommandLine> &cmds) {
+// foreground process group id (for signal forwarding)
+static volatile sig_atomic_t fg_pgid = 0;
+
+static void sigint_handler(int sig) {
+    (void)sig;
+    if (fg_pgid != 0) {
+        kill(- (pid_t)fg_pgid, SIGINT);
+    }
+}
+
+static void sigtstp_handler(int sig) {
+    (void)sig;
+    if (fg_pgid != 0) {
+        kill(- (pid_t)fg_pgid, SIGTSTP);
+    }
+}
+
+static void sigquit_handler(int sig) {
+    (void)sig;
+    if (fg_pgid != 0) {
+        kill(- (pid_t)fg_pgid, SIGQUIT);
+    }
+}
+
+static void execute_pipeline(const std::vector<CommandLine> &cmds, bool background) {
     int n = cmds.size();
     int prev_fd = -1;
     std::vector<pid_t> pids;
+    pid_t pgid = 0;
     for (int i = 0; i < n; ++i) {
         int pipefd[2] = {-1, -1};
         if (i < n-1) {
@@ -83,6 +119,12 @@ static void execute_pipeline(const std::vector<CommandLine> &cmds) {
         if (pid < 0) { perror("fork"); return; }
         if (pid == 0) {
             // child
+            // set process group for the pipeline
+            if (pgid == 0) {
+                setpgid(0, 0);
+            } else {
+                setpgid(0, pgid);
+            }
             if (prev_fd != -1) {
                 dup2(prev_fd, STDIN_FILENO);
             }
@@ -99,15 +141,27 @@ static void execute_pipeline(const std::vector<CommandLine> &cmds) {
             // never returns
         }
         // parent
+        // set process group in parent too
+        if (pgid == 0) pgid = pid;
+        setpgid(pid, pgid);
         pids.push_back(pid);
         if (prev_fd != -1) close(prev_fd);
         if (pipefd[1] != -1) close(pipefd[1]);
         prev_fd = (pipefd[0] != -1) ? pipefd[0] : -1;
     }
-    // wait all
+    if (pids.empty()) return;
+    if (background) {
+        // background: report pgid and do not wait
+        printf("[Background] %d\n", (int)pgid);
+        return;
+    }
+
+    // foreground: set fg_pgid so signal handlers forward signals
+    fg_pgid = (sig_atomic_t)pgid;
     for (pid_t p: pids) {
         int st = 0; waitpid(p, &st, 0);
     }
+    fg_pgid = 0;
 }
 
 void Shell::handleLine(const std::string &line) {
@@ -135,7 +189,11 @@ void Shell::handleLine(const std::string &line) {
         cl.argv.swap(newargv);
     }
 
-    // If single stage and builtin that should run in parent
+        // Determine if any stage requested background execution
+        bool background = false;
+        for (const auto &cl : cmds) if (cl.background) background = true;
+
+        // If single stage and builtin that should run in parent
     if (cmds.size() == 1 && !cmds[0].argv.empty()) {
         const auto &argv = cmds[0].argv;
         if (argv[0] == "exit") exit(0);
@@ -200,5 +258,5 @@ void Shell::handleLine(const std::string &line) {
     }
 
     // otherwise execute pipeline (may be single-stage non-builtin)
-    execute_pipeline(cmds);
+    execute_pipeline(cmds, background);
 }
