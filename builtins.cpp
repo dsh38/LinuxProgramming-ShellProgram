@@ -215,15 +215,35 @@ int grep_builtin(const CommandLine &cl) {
     return WIFEXITED(status) ? WEXITSTATUS(status) : 1;
 }
 
+// register builtins at load time
+#include "builtin_registry.h"
+
+static void register_my_builtins();
+struct __builtin_registrar { __builtin_registrar() { register_my_builtins(); } } __builtin_registrar_instance;
+
+static void register_my_builtins() {
+    BuiltinRegistry::instance().registerBuiltin("ls", [](const CommandLine &cl){ return ls_builtin(cl); });
+    BuiltinRegistry::instance().registerBuiltin("grep", [](const CommandLine &cl){ return grep_builtin(cl); });
+    BuiltinRegistry::instance().registerBuiltin("cp", [](const CommandLine &cl){ return cp_builtin(cl); });
+    BuiltinRegistry::instance().registerBuiltin("mv", [](const CommandLine &cl){ return mv_builtin(cl); });
+    BuiltinRegistry::instance().registerBuiltin("rm", [](const CommandLine &cl){ return rm_builtin(cl); });
+    BuiltinRegistry::instance().registerBuiltin("ln", [](const CommandLine &cl){ return ln_builtin(cl); });
+    BuiltinRegistry::instance().registerBuiltin("mkdir", [](const CommandLine &cl){ return mkdir_builtin(cl); });
+    BuiltinRegistry::instance().registerBuiltin("rmdir", [](const CommandLine &cl){ return rmdir_builtin(cl); });
+    BuiltinRegistry::instance().registerBuiltin("cat", [](const CommandLine &cl){ return cat_builtin(cl); });
+}
+
 // Simple implementations for common file-operation builtins.
 // These operate in the parent process and expect args to be
 // already expanded by the caller where appropriate.
 
 static std::vector<std::string> expand_args_glob(const CommandLine &cl) {
+    // Return only operands (skip argv[0] which is the program name)
     std::vector<std::string> out;
-    for (const auto &a : cl.argv) {
+    for (size_t idx = 1; idx < cl.argv.size(); ++idx) {
+        const auto &a = cl.argv[idx];
         if (a.find_first_of("*?[") != std::string::npos) {
-            glob_t g;
+            glob_t g; memset(&g, 0, sizeof(g));
             if (glob(a.c_str(), 0, NULL, &g) == 0) {
                 for (size_t i = 0; i < g.gl_pathc; ++i)
                     out.emplace_back(g.gl_pathv[i]);

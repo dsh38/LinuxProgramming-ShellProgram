@@ -13,7 +13,7 @@ sudo apt install -y build-essential libreadline-dev
 다음 명령어를 사용하여 프로젝트를 컴파일합니다.
 
 ```bash
-g++ -std=c++17 -Wall -Wextra -o teamshell teamshell.cpp parser.cpp shell.cpp builtins.cpp -lreadline
+g++ -std=c++17 -Wall -Wextra -o teamshell teamshell.cpp parser.cpp shell.cpp command.cpp command_factory.cpp builtin_registry.cpp builtins.cpp runtime_state.cpp -lreadline
 ```
 
 ## 3. 실행 (Run)

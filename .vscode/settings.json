@@ -1,6 +1,7 @@
 {
     "files.associations": {
         "*.pc": "c",
-        "xlocmes": "cpp"
+        "xlocmes": "cpp",
+        "algorithm": "cpp"
     }
 }
