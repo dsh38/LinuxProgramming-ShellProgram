@@ -82,10 +82,11 @@ static void sigquit_handler(int sig) {
 // execute_pipeline removed: command execution is handled by Command objects
 
 void Shell::handleLine(const std::string &line) {
-    auto stage_strs = parser_.splitPipeline(line);
-    if (stage_strs.empty()) return;
-    std::vector<CommandLine> cmds;
-    for (const auto &s: stage_strs) cmds.push_back(parser_.parse(s));
+    try {
+        auto stage_strs = parser_.splitPipeline(line);
+        if (stage_strs.empty()) return;
+        std::vector<CommandLine> cmds;
+        for (const auto &s: stage_strs) cmds.push_back(parser_.parse(s));
 
     // Parent-side globbing: expand wildcard args before execution
     for (auto &cl : cmds) {
@@ -174,8 +175,24 @@ void Shell::handleLine(const std::string &line) {
         }
     }
 
-    // otherwise execute pipeline (may be single-stage non-builtin)
-    CommandFactory factory;
-    auto cmd = factory.createFromLines(cmds);
-    if (cmd) cmd->execute(background);
+        // otherwise execute pipeline (may be single-stage non-builtin)
+        CommandFactory factory;
+        auto cmd = factory.createFromLines(cmds);
+        if (cmd) {
+            int rc = 0;
+            try {
+                rc = cmd->execute(background);
+            } catch (...) {
+                // Ensure shell does not exit on unexpected exceptions; report via perror
+                perror("teamshell");
+                return;
+            }
+            (void)rc; // return code is handled by command/builtin implementations
+        }
+    } catch (const std::exception &e) {
+        fprintf(stderr, "teamshell: exception: %s\n", e.what());
+    } catch (...) {
+        // Last-resort: print errno-based message but do not exit shell
+        perror("teamshell");
+    }
 }
